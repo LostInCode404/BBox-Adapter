@@ -25,7 +25,9 @@ class Adapter(Whitebox_LLM):
 
         # create generator
         self.generator = LLM_API(
+            provider=self.config['generator_provider'], 
             model=self.config['generator_model'], 
+            api_key=os.environ[self.config['generator_api_key_name']],
             query_params=self.config
         )
         
@@ -44,9 +46,12 @@ class Adapter(Whitebox_LLM):
                 }
             }
         )
+
+        # Add gradient checkpointing if specified
+        if self.config.get("use_gradient_checkpointing", False):
+            self.model.gradient_checkpointing_enable()  
                 
-                
-    def thought_generator(self, input_string):
+    def thought_generator(self, input_string, temp=1.0):
         '''
         The thought_generator is used to generate the next thoughts given the current CoT
         via combining generator and critic
@@ -58,11 +63,11 @@ class Adapter(Whitebox_LLM):
         prompt = prompt.strip()
 
         if self.config["max_length"] > 1 or "truthfulqa" in self.config["task"].lower():
-            generated_texts = self.generator.get_response(prompt, max_tokens=self.config["max_tokens"], extract_first_sentence=True)
+            generated_texts = self.generator.get_response(prompt, max_tokens=self.config["max_tokens"], temp=temp, extract_first_sentence=True)
         elif self.config["task"].lower() == "alpacafarm":
-            generated_texts = self.generator.get_response(prompt, max_tokens=self.config["max_tokens"], extract_first_sentence=False)
+            generated_texts = self.generator.get_response(prompt, max_tokens=self.config["max_tokens"], temp=temp, extract_first_sentence=False)
         else:
-            generated_texts = self.generator.get_response(prompt, stop=["\n\n"], max_tokens=500, extract_first_sentence=False)
+            generated_texts = self.generator.get_response(prompt, stop=["\n\n"], max_tokens=500, temp=temp, extract_first_sentence=False)
             
         if generated_texts == '<SKIP>' or len(generated_texts) < 1:
             return '<SKIP>'
@@ -110,6 +115,7 @@ class Adapter(Whitebox_LLM):
         num_epochs_blackbox_warmup = self.config.get("num_epochs_blackbox_warmup", 1)
         num_online_finetuning_repeat = self.config.get("num_online_finetuning_repeat", 1)
         offline_paths = self.config.get("offline_warmup_path")
+        eval_epochs_interval = self.config.get("eval_epochs_interval", 1)
         
         # train-validation split
         validation_ratio = self.config.get("validation_ratio", 0.)
@@ -200,7 +206,7 @@ class Adapter(Whitebox_LLM):
                 
                 dataset_path = f"data/{self.config['task']}/{self.config['critic_model']}/train_epoch_{epoch}_idx_{update_idx}"
                     
-                if epoch < num_epochs_blackbox_warmup and use_blackbox_warmup:
+                if use_blackbox_warmup and epoch < num_epochs_blackbox_warmup:
                     self.prepare_for_training(update_batch, dataset_path, use_adapter=False)
                 else:
                     self.prepare_for_training(update_batch, dataset_path, use_adapter=True)
@@ -214,12 +220,13 @@ class Adapter(Whitebox_LLM):
                 
                 progress_bar.update(1)
                 
-            self.evaluate(
-                eval_dataset, 
-                use_adapter=True,
-                stage_name=f"Eval: {epoch} | idx {update_idx}"
-            )
-            self.accelerator.wait_for_everyone()    
+            if (epoch + 1) % eval_epochs_interval == 0:
+                self.evaluate(
+                    eval_dataset, 
+                    use_adapter=True,
+                    stage_name=f"Eval: {epoch} | idx {update_idx}"
+                )
+                self.accelerator.wait_for_everyone()    
             
             self.accelerator._dataloaders = []
             del train_loader

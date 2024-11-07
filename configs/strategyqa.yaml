@@ -4,7 +4,22 @@ train_ratio: 0.9
 seed: 42
 
 # MODEL
-generator_model: gpt-3.5-turbo
+
+# OpenAI
+generator_provider: openai
+# generator_model: gpt-3.5-turbo
+generator_model: gpt-4o-mini
+generator_api_key_name: OPENAI_API_KEY
+
+# Groq
+# generator_provider: groq
+# # generator_model: mixtral-8x7b-32768
+# # generator_model: llama3-70b-8192
+# # generator_model: llama3-8b-8192
+# # generator_model: llama-3.1-70b-versatile
+# generator_model: llama-3.1-8b-instant
+# generator_api_key_name: GROQ_API_KEY
+
 
 critic_model: microsoft/deberta-v3-base
 add_special_tokens: True
@@ -33,7 +48,7 @@ offline_warmup_path: # set this to empty is offline warmup is undesired
 num_epochs_offline_warmup: 
 
 ## blackbox warmup
-use_blackbox_warmup: True
+use_blackbox_warmup: False
 num_epochs_blackbox_warmup: 3
 num_candidates_blackbox_warmup: 10
 
@@ -41,7 +56,7 @@ num_candidates_blackbox_warmup: 10
 num_online_finetuning_repeat: 1
 
 num_epochs: 3
-batch_size: 64 
+batch_size: 32 
 gradient_accumulation_steps: 1 
 
 
@@ -62,3 +77,21 @@ eval_unfinetuned: False
 num_eval_rounds: 2
 
 log_with_wandb: True
+
+# Memory optimization settings
+use_gradient_checkpointing: true
+
+# Adaptive NCE parameters
+use_adaptive_nce: True
+energy_scaling_factor: 0.5
+min_energy_weight: 1.0
+max_energy_weight: 5.0
+
+# Robustness evaluation parameters
+eval_robustness: True
+num_robustness_rounds: 2
+robustness_temperature: [0.7, 1.0, 1.3]
+robustness_types: ["temperature", "typos", "paraphrase", "noise"]
+typo_probability: 0.1
+word_swap_probability: 0.15
+noise_std: 0.1

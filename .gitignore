@@ -1,0 +1,15 @@
+# Python cache files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Data
+data/
+
+# Wandb
+wandb/
+logs/
+
+# Others
+*.notes
+notes/

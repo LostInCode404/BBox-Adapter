@@ -36,6 +36,8 @@ def experiment(config):
         dataset = load_dataset('wics/strategy-qa', split="test").shuffle(seed=config["seed"])
         train_dataset, test_dataset = dataset.train_test_split(train_size=config["train_ratio"], shuffle=False).values()
         prompt = PROMPT if config.get("use_prompt_instruction", True) else PROMPT_NO_INST
+        # train_dataset = train_dataset.select(range(206))
+        # test_dataset = test_dataset.select(range(23))
         
     elif config['task'].lower() =='scienceqa':
         from algo.task_adapters.scienceqa_adapter import ScienceQA_Adapter as Adapter

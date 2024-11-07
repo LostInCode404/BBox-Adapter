@@ -9,6 +9,7 @@ class Beam_Search():
         self.num_candidates = params['num_candidates']
         self.max_length = params['max_length']
         self.early_stopping = params['early_stopping'] 
+        self.temperature = params.get('temperature', 1.0)
     
         self.thought_generator = thought_generator
         self.stop_criterion = stop_criterion
@@ -56,7 +57,7 @@ class Beam_Search():
     def get_candidates(self, current_string, current_score):
         if not self.stop_criterion(current_string) or self.step == 0:
             # decode for the current_ids
-            res = self.thought_generator(current_string) # (num_candidates,)
+            res = self.thought_generator(current_string, temp=self.temperature)
             
             if res == '<SKIP>':
                 return '<SKIP>'

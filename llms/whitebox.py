@@ -178,7 +178,41 @@ class Whitebox_LLM():
         if neg_energy.shape[0] == 0:
             neg_energy = torch.zeros(1).to(self.accelerator.device)
         
-        ml_loss = pos_energy.mean() - neg_energy.mean()
+        if self.config.get("use_adaptive_nce", False):
+
+            # Normalize energy values to prevent saturation
+            neg_energy_normalized = (neg_energy - neg_energy.mean()) / (neg_energy.std() + 1e-6)
+            
+            # Calculate hardness with normalized energy
+            energy_scaling = self.config.get("energy_scaling_factor", 0.5)
+            neg_hardness = torch.sigmoid(neg_energy_normalized * energy_scaling)
+            
+            # Apply non-linear scaling to create more spread
+            max_weight = self.config.get("max_energy_weight", 5.0)
+            min_weight = self.config.get("min_energy_weight", 1.0)
+            weights = min_weight + (torch.pow(neg_hardness, 2) * (max_weight - min_weight))
+            
+            # Calculate loss based on weighted negative energies
+            weighted_neg_energy = neg_energy * weights
+            ml_loss = pos_energy.mean() - weighted_neg_energy.mean()
+            
+            # Log detailed statistics about negative samples
+            with torch.no_grad():
+                neg_hardness_cpu = neg_hardness.detach().cpu()
+                weights_cpu = weights.detach().cpu()
+                self.accelerator.log({
+                    "neg_hardness_min": neg_hardness_cpu.min().item(),
+                    "neg_hardness_max": neg_hardness_cpu.max().item(),
+                    "neg_hardness_mean": neg_hardness_cpu.mean().item(),
+                    "neg_hardness_std": neg_hardness_cpu.std().item(),
+                    "neg_weights_min": weights_cpu.min().item(),
+                    "neg_weights_max": weights_cpu.max().item(),
+                    "neg_weights_mean": weights_cpu.mean().item(),
+                    "neg_weights_std": weights_cpu.std().item(),
+                    "weighted_neg_energy": weighted_neg_energy.mean().item(),
+                })
+        else:
+            ml_loss = pos_energy.mean() - neg_energy.mean()
         
         if alpha != 0:
             l2_loss = alpha * energies.square().mean()
